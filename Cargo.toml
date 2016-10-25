@@ -4,5 +4,5 @@ version = "0.1.0"
 authors = ["LastOne817 <lastone817@naver.com>"]
 
 [dependencies]
-openssl = "*"
+openssl = "0.7.4"
 regex = "*"

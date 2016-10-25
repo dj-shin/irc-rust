@@ -1,14 +1,11 @@
 extern crate openssl;
 extern crate regex;
 
-use std::io;
 use std::io::prelude::*;
-use std::net::{TcpStream,Shutdown};
-use openssl::ssl::{Ssl, SslStream, SslMethod, SslContext, Error};
+use std::net::TcpStream;
+use openssl::ssl::{Ssl, SslStream, SslMethod, SslContext};
 use regex::Regex;
 use std::thread;
-use std::sync::{Arc, Mutex};
-use std::os::unix::io::{AsRawFd, FromRawFd};
 
 use std::time::Duration;
 
@@ -22,12 +19,11 @@ fn parse(msg: &str) {
     }
 }
 
-fn irc_read(stream: Arc<Mutex<SslStream<TcpStream>>>) {
-// fn irc_read(mut stream: SslStream<TcpStream>) {
+fn irc_read(mut stream: SslStream<TcpStream>) {
     loop {
         let mut buf = vec![0; 2048];
-        let mut stream = stream.lock().unwrap();
         let resp = stream.ssl_read(&mut buf);
+        println!("{:?}", resp);
         match resp {
             Ok(len) => {
                 println!("Received({})", len);
@@ -43,22 +39,15 @@ fn irc_read(stream: Arc<Mutex<SslStream<TcpStream>>>) {
                 }
             }
             Err(e) => {
-                match e {
-                    Error::WantRead(e) => {}
-                    _ => {
-                        println!("Read Error : {:?}", e);
-                    }
-                }
+                println!("Read Error : {:?}", e);
             }
         }
     }
 }
 
-fn irc_write(stream: Arc<Mutex<SslStream<TcpStream>>>) {
-// fn irc_write(mut stream: SslStream<TcpStream>) {
-    thread::sleep(Duration::new(3, 0));
+fn irc_write(mut stream: SslStream<TcpStream>) {
+    thread::sleep(Duration::new(5, 0));
     let msg = "QUIT\n";
-    let mut stream = stream.lock().unwrap();
     let res = stream.ssl_write(msg.as_bytes());
     let _ = stream.flush();
     match res {
@@ -77,16 +66,14 @@ fn main() {
     let ssl = Ssl::new(&ctx).unwrap();
 
     let raw_stream = TcpStream::connect(("irc.uriirc.org", 16664)).unwrap();
-    let mut stream = SslStream::connect(ssl, raw_stream).unwrap();
-    let _ = stream.get_mut().set_nonblocking(true);
-    let stream = Arc::new(Mutex::new(stream));
+    let stream = SslStream::connect(ssl, raw_stream).unwrap();
 
-    let read_stream = stream.clone();
+    let read_stream = stream.try_clone().unwrap();
     let read_thread = thread::spawn(move || {
         irc_read(read_stream);
     });
 
-    let write_stream = stream.clone();
+    let write_stream = stream.try_clone().unwrap();
     let write_thread = thread::spawn(move || {
         irc_write(write_stream);
     });
