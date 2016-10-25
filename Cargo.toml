@@ -1,0 +1,8 @@
+[package]
+name = "dbrust"
+version = "0.1.0"
+authors = ["LastOne817 <lastone817@naver.com>"]
+
+[dependencies]
+openssl = "*"
+regex = "*"
