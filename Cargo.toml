@@ -1,8 +1,8 @@
 [package]
-name = "dbrust"
+name = "irc-rust"
 version = "0.1.0"
 authors = ["LastOne817 <lastone817@naver.com>"]
 
 [dependencies]
-openssl = "0.7.4"
+openssl = "0.7.*"
 regex = "*"

@@ -6,32 +6,33 @@ use std::net::TcpStream;
 use openssl::ssl::{Ssl, SslStream, SslMethod, SslContext};
 use regex::Regex;
 use std::thread;
-
-use std::time::Duration;
+use std::io::{self, BufReader, BufWriter};
 
 fn parse(msg: &str) {
-    let notice = Regex::new(r"^NOTICE (?P<nick>\S*) :(?P<text>.*)$").unwrap();
-    // let privmsg = Regex::new(r"^PRIVMSG (?P<nick>\S*) :(?P<text>.*)$").unwrap();
-    if let Some(caps) = notice.captures(msg) {
-        println!("NOTICE : {} {}", &caps.name("nick").unwrap(), &caps.name("text").unwrap());
-    } else {
-        println!("Unrecognized message : {}", msg);
+    let re = Regex::new(r"(?:^[:cntrl:]*)(?::(([^@! ]*)(?:(?:!([^@]*))?@([^ ]*))?) )?([^ ]+)((?: [^: ][^ \r\n]*){0,14})(?: :?([^\r\n]*))?[:space:]*$").unwrap();
+    println!("{}", msg.trim());
+    if let Some(caps) = re.captures(msg) {
+        for i in 1..caps.len() {
+            if let Some(w) = caps.at(i) {
+                print!("{:?} ", w);
+            }
+        }
+        println!("");
+    }
+    else {
+        println!("Unrecognized : {}", msg);
     }
 }
 
-fn irc_read(mut stream: SslStream<TcpStream>) {
+fn irc_read(mut stream: BufReader<SslStream<TcpStream>>) {
     loop {
         let mut buf = vec![0; 2048];
-        let resp = stream.ssl_read(&mut buf);
-        println!("{:?}", resp);
+        let resp = stream.read_until('\n' as u8, &mut buf);
         match resp {
             Ok(len) => {
-                println!("Received({})", len);
                 if len > 0 {
                     let msg = String::from_utf8(buf).unwrap();
-                    for line in msg.split('\n') {
-                        parse(&line);
-                    }
+                    parse(&msg);
                 }
                 else {
                     println!("Connection Closed");
@@ -45,20 +46,19 @@ fn irc_read(mut stream: SslStream<TcpStream>) {
     }
 }
 
-fn irc_write(mut stream: SslStream<TcpStream>) {
-    thread::sleep(Duration::new(5, 0));
-    let msg = "QUIT\n";
-    let res = stream.ssl_write(msg.as_bytes());
+fn irc_write(mut stream: BufWriter<SslStream<TcpStream>>) {
+    let username = "rust-bot";
+    let realname = "rust-bot";
+    let nick = "테스트";
+
+    let msg = format!("USER {name} {host} {user} :{realname}\n",
+                      name=username, host=username, user=username, realname=realname);
+    let _ = stream.write(msg.as_bytes());
+    let msg = format!("NICK {nick}\n", nick=nick);
+    let _ = stream.write(msg.as_bytes());
+    let msg = format!("JOIN #{channel}\n", channel="마시마로");
+    let _ = stream.write(msg.as_bytes());
     let _ = stream.flush();
-    match res {
-        Ok(len) => {
-            println!("Write({}) : {}", len, msg.trim());
-        }
-        Err(e) => {
-            println!("Write Error : {:?}", e);
-            return;
-        }
-    }
 }
 
 fn main() {
@@ -68,14 +68,14 @@ fn main() {
     let raw_stream = TcpStream::connect(("irc.uriirc.org", 16664)).unwrap();
     let stream = SslStream::connect(ssl, raw_stream).unwrap();
 
-    let read_stream = stream.try_clone().unwrap();
+    let reader = BufReader::new(stream.try_clone().unwrap());
     let read_thread = thread::spawn(move || {
-        irc_read(read_stream);
+        irc_read(reader);
     });
 
-    let write_stream = stream.try_clone().unwrap();
+    let writer = BufWriter::new(stream.try_clone().unwrap());
     let write_thread = thread::spawn(move || {
-        irc_write(write_stream);
+        irc_write(writer);
     });
 
     let _ = read_thread.join();
